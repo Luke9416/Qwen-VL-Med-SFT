@@ -1,5 +1,5 @@
 # Qwen-VL-Med-SFT
-![Qwen-VL-Med-SFT 流程](flowchart.png)
+![Qwen-VL-Med-SFT 流程](flowchart0.png)
 一个基于 Qwen2-VL 系列模型的医学视觉语言模型微调框架，专门针对生物医学领域的多模态任务进行优化。
 
 ## 🎯 项目概述
