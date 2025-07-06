@@ -10,7 +10,6 @@ from src.trainer import QwenSFTTrainer
 from src.dataset import make_supervised_eval_data_module
 from src.params_eval import DataArguments, ModelArguments, TrainingArguments
 from src.train.train_utils import get_peft_state_maybe_zero_3, get_peft_state_non_lora_maybe_zero_3, safe_save_model_for_hf_trainer
-from src.eval.evaluation_0702 import create_compute_metrics_with_types, load_type_mapping
 
 import pathlib
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_vl, apply_liger_kernel_to_qwen2_5_vl
@@ -26,75 +25,90 @@ import numpy as np
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import deepspeed
+import math
 
 # 全局变量
 logger = None
 
 
-class EvaluationCallback(TrainerCallback):
-    """自定义评估回调，确保评估被执行并记录结果"""
+class SimpleLossEvaluationCallback(TrainerCallback):
+    """简化的评估回调，只计算 loss 和 perplexity"""
     
-    def __init__(self, trainer, eval_dataset, compute_metrics, output_dir, logger):
+    def __init__(self, trainer, eval_dataset, output_dir, logger):
         self.trainer = trainer
         self.eval_dataset = eval_dataset
-        self.compute_metrics = compute_metrics
         self.output_dir = output_dir
         self.logger = logger
         self.eval_history = []
         
     def on_step_end(self, args, state, control, **kwargs):
         """在每个步骤结束时检查是否需要评估"""
-        # 只在主进程执行评估
-        if not is_main_process(args.local_rank):
-            return control
-            
-        # 检查是否到了评估步骤
+        # 检查是否到了评估步骤（所有进程都需要参与）
         if args.evaluation_strategy == "steps" and state.global_step % args.eval_steps == 0:
-            self.logger.info(f"🔍 Step {state.global_step}: Running evaluation...")
+            if is_main_process(args.local_rank):
+                self.logger.info(f"🔍 Step {state.global_step}: Running evaluation...")
             
-            # 强制执行评估
-            metrics = self.trainer.evaluate(
-                eval_dataset=self.eval_dataset,
-                metric_key_prefix="eval"
-            )
-            
-            # 记录评估结果
-            eval_result = {
-                "step": state.global_step,
-                "metrics": metrics,
-                "timestamp": datetime.now().isoformat()
-            }
-            self.eval_history.append(eval_result)
-            
-            # 保存评估历史
-            with open(os.path.join(self.output_dir, "eval_history.json"), "w") as f:
-                json.dump(self.eval_history, f, indent=2)
-            
-            # 打印关键指标
-            self.logger.info(f"📊 Evaluation Results at Step {state.global_step}:")
-            for key, value in metrics.items():
-                if isinstance(value, (int, float)):
-                    self.logger.info(f"  {key}: {value:.4f}")
-            
-            # 检查是否是最佳模型
-            if args.metric_for_best_model in metrics:
-                current_metric = metrics[args.metric_for_best_model]
-                if not hasattr(state, 'best_metric') or state.best_metric is None:
-                    state.best_metric = current_metric
-                    state.best_model_checkpoint = os.path.join(
-                        args.output_dir, 
-                        f"checkpoint-{state.global_step}"
-                    )
-                    self.logger.info(f"🏆 New best model at step {state.global_step}!")
-                elif (args.greater_is_better and current_metric > state.best_metric) or \
-                     (not args.greater_is_better and current_metric < state.best_metric):
-                    state.best_metric = current_metric
-                    state.best_model_checkpoint = os.path.join(
-                        args.output_dir, 
-                        f"checkpoint-{state.global_step}"
-                    )
-                    self.logger.info(f"🏆 New best model at step {state.global_step}!")
+            try:
+                # 所有进程都参与评估，但只计算 loss
+                original_should_log = control.should_log
+                metrics = self.trainer.evaluate(
+                    eval_dataset=self.eval_dataset,
+                    metric_key_prefix="eval"
+                )
+                control.should_log = original_should_log 
+                # 只在主进程处理结果
+                if is_main_process(args.local_rank):
+                    # 记录评估结果
+                    eval_result = {
+                        "step": state.global_step,
+                        "metrics": metrics,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    self.eval_history.append(eval_result)
+                    
+                    # 保存评估历史
+                    with open(os.path.join(self.output_dir, "eval_history.json"), "w") as f:
+                        json.dump(self.eval_history, f, indent=2)
+                    
+                    # 打印关键指标
+                    self.logger.info(f"📊 Evaluation Results at Step {state.global_step}:")
+                    for key, value in metrics.items():
+                        if isinstance(value, (int, float)):
+                            self.logger.info(f"  {key}: {value:.4f}")
+                    
+                    # 检查是否是最佳模型（基于 loss）
+                    if "eval_loss" in metrics:
+                        current_loss = metrics["eval_loss"]
+                        if not hasattr(state, 'best_metric') or state.best_metric is None:
+                            state.best_metric = current_loss
+                            state.best_model_checkpoint = os.path.join(
+                                args.output_dir, 
+                                f"checkpoint-{state.global_step}"
+                            )
+                            self.logger.info(f"🏆 New best model at step {state.global_step}!")
+                        elif current_loss < state.best_metric:  # Lower loss is better
+                            state.best_metric = current_loss
+                            state.best_model_checkpoint = os.path.join(
+                                args.output_dir, 
+                                f"checkpoint-{state.global_step}"
+                            )
+                            self.logger.info(f"🏆 New best model at step {state.global_step}!")
+                            
+            except Exception as e:
+                if is_main_process(args.local_rank):
+                    self.logger.error(f"❌ Evaluation failed at step {state.global_step}: {str(e)}")
+                    import traceback
+                    self.logger.error(traceback.format_exc())
+                
         return control
+
+
+def simple_compute_metrics(eval_preds):
+    """简单的 metrics 计算函数，只返回 perplexity"""
+    # eval_preds 包含 predictions 和 label_ids
+    # 但我们不需要做任何计算，因为 Trainer 已经计算了 loss
+    # 这里只是为了满足 Trainer 的接口要求
+    return {}
 
 
 def setup_logger(output_dir: str, local_rank: int, log_file: str = "training.log"):
@@ -412,54 +426,70 @@ def print_model_info(model):
 
 
 def setup_evaluation(data_args, training_args):
-    """设置验证配置"""
+    """设置验证配置（简化版，不使用复杂的 metrics）"""
     # 检查是否有验证数据
     eval_data_path = getattr(data_args, 'eval_data_path', None)
     
     if eval_data_path and os.path.exists(eval_data_path):
         rank0_print(f"📊 Found evaluation data: {eval_data_path}")
         
-        # 检查是否有对应的type_mapping文件
-        type_mapping_file = None
-        possible_mapping_files = [
-            eval_data_path.replace('.json', '_mapping.json'),
-            eval_data_path.replace('.json', '_type_mapping.json'),
-            os.path.join(os.path.dirname(eval_data_path), 'type_mapping.json'),
-            os.path.join(os.path.dirname(eval_data_path), 'validation_mapping.json')
-        ]
-        
-        for mapping_file in possible_mapping_files:
-            if os.path.exists(mapping_file):
-                type_mapping_file = mapping_file
-                rank0_print(f"📋 Found type mapping: {mapping_file}")
-                break
-        
-        if not type_mapping_file:
-            rank0_print("⚠️ No type mapping file found, using standard evaluation")
-        
         # 强制启用验证相关参数
         training_args.evaluation_strategy = "steps"
         training_args.eval_steps = max(1, training_args.logging_steps)
-        training_args.metric_for_best_model = "eval_soft_match" if training_args.metric_for_best_model is None else training_args.metric_for_best_model
-        training_args.greater_is_better = True if training_args.greater_is_better is None else training_args.greater_is_better
+        
+        # 使用 eval_loss 作为最佳模型的指标
+        training_args.metric_for_best_model = "eval_loss"
+        training_args.greater_is_better = False  # Lower loss is better
+        
         training_args.load_best_model_at_end = True
         training_args.save_total_limit = 3 if training_args.save_total_limit is None else training_args.save_total_limit
         
         # 确保do_eval为True
         training_args.do_eval = True
         
-        rank0_print(f"✅ Evaluation enabled:")
+        # 重要：只计算 loss，不计算其他 metrics
+        training_args.prediction_loss_only = True
+        
+        rank0_print(f"✅ Evaluation enabled (loss only):")
         rank0_print(f"   - Strategy: {training_args.evaluation_strategy}")
         rank0_print(f"   - Eval steps: {training_args.eval_steps}")
         rank0_print(f"   - Metric: {training_args.metric_for_best_model}")
         rank0_print(f"   - Do eval: {training_args.do_eval}")
+        rank0_print(f"   - Prediction loss only: {training_args.prediction_loss_only}")
         
-        return True, type_mapping_file
+        return True
     else:
         rank0_print("⚠️ No evaluation data found, skipping validation")
         training_args.evaluation_strategy = "no"
         training_args.do_eval = False
-        return False, None
+        return False
+
+
+class SimpleQwenSFTTrainer(QwenSFTTrainer):
+    """自定义 Trainer，在评估结果中添加 perplexity"""
+    
+    def _compute_metrics(self, eval_prediction):
+        """覆盖父类方法，添加 perplexity 计算"""
+        # 如果设置了 prediction_loss_only，不需要计算复杂 metrics
+        if self.args.prediction_loss_only:
+            return {}
+        
+        # 调用用户定义的 compute_metrics（如果有的话）
+        if self.compute_metrics is not None:
+            return self.compute_metrics(eval_prediction)
+        
+        return {}
+    
+    def log(self, logs, start_time=None):
+        """覆盖 log 方法，自动计算并添加 perplexity"""
+        # 如果有 loss，计算对应的 perplexity
+        if "loss" in logs:
+            logs["perplexity"] = math.exp(logs["loss"])
+        if "eval_loss" in logs:
+            logs["eval_perplexity"] = math.exp(logs["eval_loss"])
+        
+        # 调用父类的 log 方法
+        super().log(logs)
 
 
 def train():
@@ -475,10 +505,24 @@ def train():
     
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     
+    # 设置必要的参数
+    training_args.label_names = ['labels']
+    if not hasattr(training_args, 'include_for_metrics') or training_args.include_for_metrics is None:
+        training_args.include_for_metrics = []
+    
+    # 移除 batch_eval_metrics，避免错误
+    if hasattr(training_args, 'batch_eval_metrics'):
+        training_args.batch_eval_metrics = False
+
     # 设置分布式训练相关参数
     if is_distributed:
         training_args.local_rank = local_rank
-        training_args.ddp_find_unused_parameters = False
+        # 对于 LoRA 训练，通常不需要 find_unused_parameters
+        if training_args.lora_enable:
+            training_args.ddp_find_unused_parameters = False
+        else:
+            # 对于全参数训练，可能需要设置为 True，但先尝试 False
+            training_args.ddp_find_unused_parameters = False
         
         # 如果使用了 DeepSpeed，确保配置正确
         if training_args.deepspeed:
@@ -504,7 +548,7 @@ def train():
         with open(os.path.join(training_args.output_dir, "training_config.json"), "w", encoding="utf-8") as f:
             json.dump(config_info, f, indent=2, ensure_ascii=False)
         
-    has_eval_data, type_mapping_file = setup_evaluation(data_args, training_args)
+    has_eval_data = setup_evaluation(data_args, training_args)
     
     # 初始化TensorBoard（仅主进程）
     tb_writer = None
@@ -514,7 +558,7 @@ def train():
         progress_callback = TensorBoardCallback(tb_writer, output_dir=training_args.output_dir)
 
     rank0_print("=" * 60)
-    rank0_print("QWEN2.5-VL MULTI-GPU TRAINING WITH EVALUATION")
+    rank0_print("QWEN2.5-VL MULTI-GPU TRAINING WITH SIMPLE EVALUATION")
     rank0_print("=" * 60)
     rank0_print(f"🌍 World Size: {world_size}")
     rank0_print(f"🔧 Local Rank: {local_rank}")
@@ -523,11 +567,7 @@ def train():
     rank0_print(f"📁 Output dir: {training_args.output_dir}")
     rank0_print(f"🎯 LoRA enabled: {training_args.lora_enable}")
     rank0_print(f"🚀 DeepSpeed: {'✅ Enabled' if training_args.deepspeed else '❌ Disabled'}")
-    rank0_print(f"📊 Evaluation: {'✅ Enabled' if has_eval_data else '❌ Disabled'}")
-    if type_mapping_file:
-        rank0_print(f"📋 Type-based evaluation: ✅ Enabled")
-    elif has_eval_data:
-        rank0_print(f"📋 Type-based evaluation: ⚠️ No mapping file")
+    rank0_print(f"📊 Evaluation: {'✅ Enabled (loss only)' if has_eval_data else '❌ Disabled'}")
     rank0_print(f"⚡ Max steps: {training_args.max_steps}")
     rank0_print(f"📦 Batch size: {training_args.per_device_train_batch_size}")
     rank0_print(f"🔄 Gradient accumulation: {training_args.gradient_accumulation_steps}")
@@ -707,6 +747,17 @@ def train():
                                               processor=processor,
                                               data_args=data_args)
     
+    # 打印数据集信息
+    train_dataset = data_module.get('train_dataset', None)
+    if train_dataset:
+        rank0_print(f"✅ Training dataset loaded: {len(train_dataset)} samples")
+        # 检查数据加载器是否正常
+        if is_distributed:
+            rank0_print(f"📊 Each GPU will process approximately {len(train_dataset) // world_size} samples per epoch")
+    else:
+        rank0_print("❌ No training dataset found!")
+        raise ValueError("Training dataset is required but not found")
+    
     # 检查是否成功加载了验证数据集
     eval_dataset = data_module.get('eval_dataset', None)
     if has_eval_data and eval_dataset is None:
@@ -717,95 +768,60 @@ def train():
     elif eval_dataset is not None:
         rank0_print(f"✅ Evaluation dataset loaded: {len(eval_dataset)} samples")
 
-    # 设置评估函数
-    compute_metrics = None
-    if has_eval_data and eval_dataset is not None:
-        rank0_print("🔍 Setting up evaluation metrics...")
-        
-        if type_mapping_file:
-            rank0_print(f"📋 Using type-based evaluation with: {type_mapping_file}")
-            # 预加载type_mapping
-            load_type_mapping(type_mapping_file)
-            compute_metrics = create_compute_metrics_with_types(
-                processor, 
-                training_args.output_dir, 
-                type_mapping_file,
-                eval_dataset=eval_dataset
-            )
-        else:
-            rank0_print("📊 Using standard evaluation")
-            compute_metrics = create_compute_metrics_with_types(
-                processor, 
-                training_args.output_dir,
-                eval_dataset=eval_dataset
-            )
-
-    # 创建训练器
+    # 创建训练器（使用自定义的 SimpleQwenSFTTrainer）
     rank0_print("🚀 Creating trainer...")
-    trainer = QwenSFTTrainer(
+    trainer = SimpleQwenSFTTrainer(
         model=model,
         processing_class=processor,
         args=training_args,
-        compute_metrics=compute_metrics if has_eval_data else None,
+        compute_metrics=simple_compute_metrics if has_eval_data else None,  # 使用简单的 compute_metrics
         **data_module
     )
     
-    # 添加回调（仅在主进程）
+    # 添加回调
     callbacks_to_add = []
-    if is_main_process(local_rank) and hasattr(trainer, 'add_callback'):
-        if progress_callback:
-            callbacks_to_add.append(progress_callback)
-        
-        # 添加评估回调
-        if has_eval_data and eval_dataset is not None:
-            eval_callback = EvaluationCallback(
-                trainer=trainer,
-                eval_dataset=eval_dataset,
-                compute_metrics=compute_metrics,
-                output_dir=training_args.output_dir,
-                logger=logger
-            )
-            callbacks_to_add.append(eval_callback)
-            rank0_print("✅ Added evaluation callback")
+    
+    # TensorBoard 回调只在主进程添加
+    if is_main_process(local_rank) and progress_callback and hasattr(trainer, 'add_callback'):
+        callbacks_to_add.append(progress_callback)
+        rank0_print("✅ Added TensorBoard callback (main process only)")
+    
+    # 简化的评估回调
+    if has_eval_data and eval_dataset is not None and hasattr(trainer, 'add_callback'):
+        eval_callback = SimpleLossEvaluationCallback(
+            trainer=trainer,
+            eval_dataset=eval_dataset,
+            output_dir=training_args.output_dir,
+            logger=logger
+        )
+        callbacks_to_add.append(eval_callback)
+        rank0_print("✅ Added simple evaluation callback (loss only)")
     
     # 添加所有回调
     for callback in callbacks_to_add:
         if hasattr(trainer, 'add_callback'):
             trainer.add_callback(callback)
     
-    rank0_print(f"📎 Added {len(callbacks_to_add)} callbacks to trainer")
-    
-    # 同步所有进程
-    if is_distributed:
-        torch.distributed.barrier()
-    
-    # 开始训练前，先运行一次评估作为baseline（仅主进程执行）
-    if has_eval_data and eval_dataset is not None and is_main_process(local_rank):
-        rank0_print("📊 Running initial evaluation as baseline...")
-        try:
-            initial_metrics = trainer.evaluate(eval_dataset=eval_dataset)
-            rank0_print("📊 Initial Evaluation Results:")
-            for key, value in initial_metrics.items():
-                if isinstance(value, (int, float)) and key.startswith('eval_'):
-                    rank0_print(f"  {key}: {value:.4f}")
-        except Exception as e:
-            rank0_print(f"⚠️ Initial evaluation failed: {e}")
+    if is_main_process(local_rank):
+        rank0_print(f"📎 Added {len(callbacks_to_add)} callbacks to trainer")
     
     # 开始训练
     rank0_print("🚀 Starting training...")
+    rank0_print(f"📊 Training on {world_size} GPUs")
+    rank0_print(f"📦 Total batch size: {training_args.per_device_train_batch_size * world_size * training_args.gradient_accumulation_steps}")
+    
     try:
         if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
             rank0_print("🔄 Found existing checkpoint, resuming training...")
             trainer.train(resume_from_checkpoint=True)
         else:
+            rank0_print("🆕 Starting fresh training...")
             trainer.train()
     except Exception as e:
         logger.error(f"❌ Training failed with error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise
-
-    # 同步所有进程
-    if is_distributed:
-        torch.distributed.barrier()
 
     # 保存模型（仅主进程执行）
     if is_main_process(local_rank):
@@ -832,23 +848,15 @@ def train():
             safe_save_model_for_hf_trainer(trainer, output_dir=training_args.output_dir)
             rank0_print(f"✅ Full model saved to {training_args.output_dir}")
 
-        # 最终验证
+        # 最终验证（简化版）
         if has_eval_data and eval_dataset is not None:
             rank0_print("🔍 Running final evaluation...")
             try:
                 final_metrics = trainer.evaluate(eval_dataset=eval_dataset)
                 rank0_print("📊 Final Evaluation Results:")
                 for key, value in final_metrics.items():
-                    if isinstance(value, (int, float)) and key.startswith('eval_'):
+                    if isinstance(value, (int, float)):
                         rank0_print(f"  {key}: {value:.4f}")
-                
-                # 计算改进
-                if 'initial_metrics' in locals():
-                    rank0_print("\n📈 Improvements:")
-                    for key in final_metrics:
-                        if key in initial_metrics and isinstance(final_metrics[key], (int, float)):
-                            improvement = final_metrics[key] - initial_metrics[key]
-                            rank0_print(f"  {key}: {improvement:+.4f}")
                 
                 # 保存最终评估结果
                 with open(os.path.join(training_args.output_dir, "final_evaluation.json"), "w") as f:
@@ -881,10 +889,6 @@ def train():
         rank0_print(f"📊 Check evaluation_history.json for eval metrics")
         rank0_print(f"📈 Use TensorBoard to visualize: tensorboard --logdir {training_args.output_dir}/logs")
         rank0_print(f"🌍 Training completed on {world_size} GPUs")
-
-    # 确保所有进程都完成
-    if is_distributed:
-        torch.distributed.barrier()
 
 
 if __name__ == "__main__":
