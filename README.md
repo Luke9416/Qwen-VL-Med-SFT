@@ -137,3 +137,145 @@ requirement.txt
 ## 📄 许可证
 
 本项目遵循相应的开源许可证，请参考各个依赖项目的许可证要求。
+
+
+
+# Qwen-VL-Med-SFT
+
+![Qwen-VL-Med-SFT Workflow](flowchart0.png)
+
+A medical vision-language model fine-tuning framework based on the Qwen2-VL series, specifically optimized for biomedical multimodal tasks.
+
+## 🎯 Project Overview
+
+This project is built upon the [2U1/Qwen2-VL-Finetune](https://github.com/2U1/Qwen2-VL-Finetune) architecture, utilizing HuggingFace Transformers and DeepSpeed for training. Enhanced features include:
+
+- ✅ Validation module during training
+- ✅ Data preprocessing validation
+- ✅ Model effectiveness verification
+- ✅ Statistical comparison analysis
+
+The project uses the [LLaVA-Med](https://github.com/microsoft/LLaVA-Med) dataset and implements a two-stage fine-tuning strategy: **Concept Alignment** and **Instruction Following**.
+
+## 📊 Data Preprocessing Pipeline
+
+### Training Data Processing
+1. **Data Format Conversion**
+   - Generate standard JSON files following [2U1/Qwen2-VL-Finetune](https://github.com/2U1/Qwen2-VL-Finetune) format
+   - Iterative validation according to DataLoader processing to filter valid data
+
+2. **Validation Data Processing**
+   - Use `./data_process/data_trans.py` script for processing
+   - Generate `test.json` and `type_mapping.json` for testing and classification
+
+### Data Classification System
+
+Based on question types, we categorize data into the following classes:
+
+#### Closed-set Questions
+| Type | Task Description |
+|------|------------------|
+| **Yes/No Judgment** | Binary judgment on the presence of specific features or abnormalities in medical images |
+| **Modality Recognition** | Identify imaging modalities or technical types of medical images |
+| **General Questions** | Closed-set questions not belonging to specific categories |
+| **Location Positioning** | Inquire about specific locations of lesions or structures (limited options) |
+
+#### Open-end Questions
+| Type | Task Description |
+|------|------------------|
+| **General Description** | Open-ended questions requiring comprehensive description or explanation |
+| **Anatomical Identification** | Identify and describe anatomical structures or organs in images |
+| **Location Description** | Detailed description of lesion or structure locations |
+| **Abnormality Recognition** | Identify and describe pathological changes or abnormal findings |
+| **Counting Tasks** | Count specific objects in images |
+| **Comparative Analysis** | Compare changes across different structures or time points |
+| **Appearance Description** | Describe visual characteristics of lesions or structures |
+| **Impact Assessment** | Evaluate lesion impact on surrounding structures |
+
+## 🚀 Model Training
+
+### Training Architecture
+Based on HuggingFace Transformers' `Trainer` class with integrated callbacks via `trainer.add_callback(callback)`:
+- Validation workflow callbacks
+- TensorBoard logging
+- Training process monitoring
+
+### Starting Training
+
+#### Single GPU Training/Debugging
+```bash
+bash finetune_lora_single_gpu.sh
+```
+
+#### Multi-GPU Training (DeepSpeed)
+```bash
+bash finetune_lora_mult_gpu.sh
+```
+
+## 🧪 Model Testing and Evaluation
+
+### Test Configuration
+Supports two testing modes:
+- **Custom Prompt Testing**: Using custom prompts
+- **Original System Prompt Testing**: Using model default prompts
+
+The testing process calculates perplexity and compares results between base and LoRA models.
+
+### Running Tests
+```bash
+bash run_eval.sh
+```
+
+### Statistical Result Analysis
+Use the `result_statistic.py` script for category-wise statistical analysis.
+
+#### Evaluation Metrics System
+| Metric Name | Value Range | Reasonable Score Range | Meaning | Description |
+|-------------|-------------|----------------------|---------|-------------|
+| **BLEU-4** | 0 ~ 1 | 0.2 ~ 0.6 | n-gram precision matching rate | Measures local language matching, penalizes repetition and missing words |
+| **ROUGE-L** | 0 ~ 1 | 0.3 ~ 0.6 | Longest common subsequence recall | Emphasizes information coverage, favors recall |
+| **METEOR** | 0 ~ 1 | 0.3 ~ 0.5 | Comprehensive metric: precision + recall + semantic synonyms + word order penalty | Tolerant of expression differences, suitable for generative tasks |
+| **CIDEr** | 0 ~ ∞ | 0.5 ~ 2.0 | TF-IDF weighted n-gram matching score | Robust with multiple references, common in vision-language tasks |
+| **BERTScore (F1)** | 0 ~ 1 | 0.85 ~ 0.95 | BERT-based sentence vector semantic similarity | Effective even with flexible expressions |
+| **Soft Matching** | 0 ~ 1 | 0.6 ~ 0.95 | Character-level similarity (e.g., SequenceMatcher/LCS ratio) | Captures partial string similarity, strong fault tolerance |
+| **Substring Match** | 0 or 1 | Binary (0/1) | Whether completely contained (reference ∈ prediction or vice versa) | Very strict, suitable for short and clear answer scenarios |
+
+## 📈 Experimental Results
+
+Based on Qwen2-VL-Instruct with concept alignment fine-tuning, applying LoRA technique to the visual-merger-proj module. Comparison results available in: `result/evaluation_metrics.json`
+
+### Performance Comparison
+| Data Type | Model | Exact Match | Soft Match | Word Overlap | BLEU-4 | ROUGE-L |
+|-----------|-------|-------------|------------|--------------|--------|---------|
+| **Overall** | Base | 0.000 | 0.056 | 0.034 | 0.004 | 0.051 |
+|  | **LoRA** | **0.117** | **0.238** | **0.175** | **0.030** | **0.210** |
+| **Open-end** | Base | 0.000 | 0.069 | 0.035 | 0.004 | 0.052 |
+|  | **LoRA** | **0.004** | **0.163** | **0.071** | **0.012** | **0.109** |
+| **Closed-set** | Base | 0.000 | 0.030 | 0.031 | 0.004 | 0.048 |
+|  | **LoRA** | **0.341** | **0.388** | **0.384** | **0.067** | **0.411** |
+
+### Key Findings
+- **Closed-set Questions**: LoRA model shows significant improvement across all metrics, particularly Exact Match improving from 0.000 to 0.341
+- **Open-end Questions**: Although improvements are relatively smaller, notable enhancements in Soft Match and ROUGE-L metrics
+- **Overall Performance**: LoRA fine-tuned model demonstrates better understanding and generation capabilities in medical visual question answering tasks
+
+## 🔧 Environment Requirements
+
+See `requirements.txt` for detailed dependencies.
+
+## 📚 References
+
+- [2U1/Qwen2-VL-Finetune](https://github.com/2U1/Qwen2-VL-Finetune)
+- [Microsoft LLaVA-Med](https://github.com/microsoft/LLaVA-Med)
+- [Qwen2-VL Official Documentation](https://github.com/QwenLM/Qwen2-VL)
+
+## 📄 License
+
+This project follows the corresponding open-source licenses. Please refer to the license requirements of each dependency project.
+
+---
+
+## 🌏 Language Versions
+
+- [English](README.md)
+- [中文](README_zh.md)
