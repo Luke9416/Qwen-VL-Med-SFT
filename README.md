@@ -128,6 +128,7 @@ bash run_eval.sh
   - 病变位置确认与相对位置表述能力仍待提升
   - 对部分病症有“轻度”描述倾向
 * 表格说明：
+
 | 模型简称                            | 训练方式及说明                                                |
 | ----------------------------------- | ------------------------------------------------------------ |
 | Qwen2VL2BInst_Stage1                | Qwen2-VL-2B instruct，概念对齐微调           |
@@ -141,8 +142,10 @@ bash run_eval.sh
 
 #### 性能对比
 * **整体性能** 
+
 详细结果见 [`result/model_comparison_tables.txt`](result/model_comparison_tables.txt)，  
 个例统计见 [`result/evaluation_metrics.json`](result/evaluation_metrics.json)
+
 | Category | Metric | Qwen2VL2BInst_Stage1 | Qwen2VL7BInst | Qwen2VL7B | Qwen2VL7BBase_Stage1 | Qwen2VL7BInst_Stage1 | Qwen2VL7BInstSlakeTrainBaseOnStage1 | Qwen25VL32BInst |
 |----------|--------|--------|--------|--------|--------|--------|--------|--------|
 | Text Matching | Exact Match | 0.2026 | 0.0000 | 0.0000 | 0.1225 | 0.4354 | **0.4722** | 0.0000 |
