@@ -12,6 +12,8 @@
 - ✅ 结果统计对比分析
 
 项目采用 [LLaVA-Med](https://github.com/microsoft/LLaVA-Med) 数据集，实现两阶段微调策略：**概念对齐**（Concept Alignment）和**指令跟随**（Instruction Following）。
+项目采用 [Med-GRIT-270K](https://github.com/ShawnHuang497/BiRD) 数据集，进行grounding相关能力的效果优化
+项目采用 Reasonging&direct 为基于 LLaVA-Med 的instruct 数据集自建，代码 [`data_process/reason_direct_gene.py`]
 
 ## 📊 数据预处理流程
 
@@ -38,18 +40,6 @@
 | **通用问题** | 不属于特定类别的封闭式问题 |
 | **位置定位** | 询问病变或结构的具体位置（限定选项） |
 
-#### 开放式问题（Open-end）
-
-| 类型 | 任务描述 |
-|------|----------|
-| **通用描述** | 需要综合描述或解释的开放性问题 |
-| **解剖识别** | 识别和描述影像中的解剖结构或器官 |
-| **位置描述** | 详细描述病变或结构的位置 |
-| **异常识别** | 识别和描述病理改变或异常发现 |
-| **计数任务** | 计算影像中特定对象的数量 |
-| **比较分析** | 比较不同结构或时间点的变化 |
-| **外观描述** | 描述病变或结构的视觉特征 |
-| **影响评估** | 评估病变对周围结构的影响 |
 
 ## 🚀 模型训练
 
@@ -140,6 +130,7 @@ bash run_eval.sh
 | Qwen25VL32BInst                     | Qwen2-VL-32B instruct 无训练                   |
 
 - **Reasoning训练**：针对每个QA对添加了Reasoning prompt，使用Qwen3根据LLaVA Med QA训练集中的一部分，将问题的answer作为输入，生成Reasoning回答和Directly回答，构建样本集。
+* 数据集构建代码见：data_process/reason_direct_gene.py
 
 #### 性能对比
 * **整体性能** 
@@ -162,11 +153,7 @@ bash run_eval.sh
 | Fine-grained | Char Recall | 0.6958 | 0.6992 | 0.6383 | 0.7208 | 0.7159 | 0.7640 | 0.7999 | **0.8596** |
 | Fine-grained | Word Precision | 0.5176 | **0.5192** | 0.5095 | 0.2628 | 0.4314 | 0.3106 | 0.0574 | 0.0125 |
 | Fine-grained | Word Recall | 0.5490 | 0.5497 | 0.5154 | 0.5200 | 0.5667 | 0.5457 | 0.5403 | **0.6631** |
-| Perplexity | Mean Perplexity | 278.8062 | 278.8062 | **173.8327** | 598.1220 | 598.1220 | 240741.5970 | 240741.5970 | 694010380428.6918 |
-| Perplexity | Median Perplexity | 3.8906 | 3.8906 | **2.8906** | 3.7969 | 3.7969 | 216.0000 | 216.0000 | 13376.0000 |
-| Perplexity | Std Perplexity | 2424.2811 | 2424.2811 | **1582.0417** | 6534.2893 | 6534.2893 | 1523977.9827 | 1523977.9827 | 4472871553015.6406 |
-| Perplexity | Min Perplexity | 1.0391 | 1.0391 | 1.0156 | 1.0156 | 1.0156 | **1.0000** | 1.0000 | 1.0000 |
-| Perplexity | Max Perplexity | 52736.0000 | 52736.0000 | **32000.0000** | 119296.0000 | 119296.0000 | 21364736.0000 | 21364736.0000 | 61572651155456.0000 |
+
 
 ## Open-ended Questions
 
@@ -174,15 +161,8 @@ bash run_eval.sh
 |----------|--------|--------|--------|--------|--------|--------|--------|--------|--------|
 | Text Matching | Exact Match | **0.3371** | 0.3371 | 0.3329 | 0.0609 | 0.2266 | 0.1601 | 0.0000 | 0.0000 |
 | Text Matching | Soft Match | 0.4866 | 0.4872 | **0.4934** | 0.3782 | 0.4627 | 0.2859 | 0.1123 | 0.0029 |
-| Text Matching | ROUGE-L | 0.4007 | 0.4019 | 0.3934 | 0.3520 | **0.4120** | 0.2351 | 0.0844 | 0.0167 |
-| Text Matching | BLEU-4 | 0.0682 | **0.0685** | 0.0681 | 0.0491 | 0.0664 | 0.0355 | 0.0076 | 0.0009 |
-| Text Matching | Word Overlap | 0.3734 | **0.3737** | 0.3677 | 0.2771 | 0.3616 | 0.2055 | 0.0531 | 0.0133 |
-| Text Matching | BERTScore F1 | **0.0000** | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
 | Fine-grained | Word Contain | 0.4986 | 0.5000 | 0.4547 | 0.5297 | 0.5326 | 0.5368 | 0.5467 | **0.7394** |
-| Fine-grained | Char F1 | 0.5964 | **0.5971** | 0.5626 | 0.4896 | 0.5609 | 0.5315 | 0.4205 | 0.3947 |
 | Fine-grained | Word F1 | 0.3902 | 0.3908 | 0.3824 | 0.3319 | **0.3969** | 0.2381 | 0.0930 | 0.0259 |
-| Fine-grained | Char Precision | 0.5957 | **0.5965** | 0.5812 | 0.4360 | 0.5317 | 0.4598 | 0.3234 | 0.2873 |
-| Fine-grained | Char Recall | 0.6512 | 0.6549 | 0.5825 | 0.6708 | 0.6685 | 0.7501 | 0.7706 | **0.8794** |
 | Fine-grained | Word Precision | 0.3883 | **0.3893** | 0.3889 | 0.2942 | 0.3802 | 0.2076 | 0.0546 | 0.0133 |
 | Fine-grained | Word Recall | 0.4312 | 0.4310 | 0.3978 | 0.4472 | 0.4621 | 0.4475 | 0.4607 | **0.6637** |
 
@@ -196,8 +176,55 @@ bash run_eval.sh
 
 * 结果情况：（请忽略不准确的机器翻译）
 ![result compare 1](imgs/img1.jpg)
-![result compare 2](imgs/img2.jpg)
-![result compare 3](imgs/img3.jpg)
+
+
+### Grounding能力效果优化
+* **数据集介绍**
+
+
+* **结果分析**
+* Visual Grounding (200 sample)
+| Metric | ReasonLora32 | ReasonLoraPmt | OriPmt | GroundLoraPmt | Stage1AllPmt | Stage1Lora16PMT | Stage1 | ReasonLora | RefausePmt |
+|--------|---------|---------|---------|---------|---------|---------|---------|---------|---------|
+| Consistency Rate | 0.0500 | 0.7600 | 0.7950 | 0.7273 | **0.8800** | 0.8800 | 0.0600 | 0.0500 | 0.2800 |
+| Average IoU | NAN | 0.1232 | 0.1695 | 0.4301 | 0.1927 | 0.1861 | NAN | NAN | 0.1141 |
+| IoU > 0.5 Rate | NAN | 0.0043 | 0.0303 | **0.2667** | 0.0433 | 0.0519 | NAN | NAN | 0.0043 |
+| Center Inclusion Accuracy | NAN | 0.0996 | 0.1255 | **0.3333** | 0.1429 | 0.2338 | 0.0087 | 0.0000 | 0.0736 |
+| Average CPE | NAN | 111.4301 | 114.6439 | **69.0272** | 121.8034 | 162.8852 | NAN | NAN | 27.5950 |
+| Avg Position Match Rate | 0.0768 | 0.1690 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | **0.2165** | 0.0768 | 0.0000 |
+
+* 指标介绍：
+| 指标               | 说明                                                   | 指标                        | 说明                                                |
+| ---------------- | ---------------------------------------------------- | ------------------------- | ------------------------------------------------- |
+| Consistency Rate | Predict中包含有Boxes的比例              | Average IoU               | 平均交并比（Intersection over Union），衡量预测框与真实框重叠程度的平均值。 |
+| IoU > 0.5 Rate   | 预测框与真实框的 IoU 超过 0.5 的帧（或样本）占总数的比例   | Center Inclusion Accuracy | 预测框中心点落在真实框内部的比例   |
+| Average CPE      | 平均中心点误差（Center Point Error） | Avg Position Match Rate   | 位置关键词匹配    |
+Avg Position Match Rate: 将坐标转换为图像的相对位置，对比输出结果中是否有关键词匹配
+
+*  Refering Object Classification (200 sample)
+| Category | Metric | ReasonLora | Stage1Lora | Stage1All | Ground | Ori |
+|----------|--------|--------|--------|--------|--------|--------|
+| Text Matching | Exact Match | 0.0000 | 0.0100 | 0.0000 | **0.5500** | 0.0000 |
+| Text Matching | Soft Match | 0.2544 | 0.1616 | 0.1082 | **0.7217** | 0.0588 |
+| Text Matching | Word Overlap | 0.0379 | 0.0240 | 0.0092 | **0.6217** | 0.0018 |
+| Text Matching | BERTScore F1 | 0.3513 | 0.2746 | 0.2449 | **0.7467** | 0.2731 |
+| Text Matching | ROUGE 1 | 0.0211 | 0.0102 | 0.0117 | **0.6088** | 0.0000 |
+| Text Matching | METOR | 0.0306 | 0.0243 | 0.0244 | **0.4009** | 0.0053 |
+| Fine-grained | Word Contain | 0.0800 | 0.0800 | 0.1200 | **0.6600** | 0.0909 |
+| Fine-grained | Char F1 | 0.4395 | 0.4493 | 0.4678 | **0.7712** | 0.4680 |
+| Fine-grained | Word F1 | 0.0479 | 0.0313 | 0.0169 | **0.6330** | 0.0035 |
+| Fine-grained | Char Precision | 0.4178 | 0.3667 | 0.3392 | **0.8119** | 0.3268 |
+| Fine-grained | Char Recall | 0.5532 | 0.7409 | 0.8796 | 0.7918 | **0.8855** |
+| Fine-grained | Word Precision | 0.0504 | 0.0318 | 0.0096 | **0.6408** | 0.0018 |
+| Fine-grained | Word Recall | 0.0512 | 0.0554 | 0.0896 | **0.6308** | 0.0909 |
+
+
+* 总体分析：
+- **Gronding**：通过propmt引导，模型本身就可以具备给出Boxes的能力，没有进行概念对齐Ori7B会出现检测偏差较大和概念模糊的问题；经过概念对齐后，模型可以有较好的器官检测能力，病灶检测能力不足，偏向于检测更大区域，且多框检测的能力不足；Refause的CPE最低，是因为经过拒绝感知，模型只对自己有完全把握的问题进行boxes输出，对于医疗镜像图像容易左右位置混淆；另外就是对于低分辨率图像，效果不佳。
+- **回复能力**：通过Grounding数据训练后，模型在针对location相关回复时，会直接给出boxes而不是基于位置的模糊回复，Reason数据集在没有给出Reasoning Require的propmt时，回复简洁清晰；经过Reasoning和direct sft后，模型有了明显的判断能力，指进行stage1 微调的时候，模型对于问题的判断解答存在一定的偏向性。
+
+* 结果展示：
+- 部分图像展示：[Grounding](./imgs/grounding)
 
 ## 🔧 环境要求
 
@@ -247,25 +274,6 @@ The project uses the [LLaVA-Med](https://github.com/microsoft/LLaVA-Med) dataset
 
 Based on question types, we categorize data into the following classes:
 
-#### Closed-set Questions
-| Type | Task Description |
-|------|------------------|
-| **Yes/No Judgment** | Binary judgment on the presence of specific features or abnormalities in medical images |
-| **Modality Recognition** | Identify imaging modalities or technical types of medical images |
-| **General Questions** | Closed-set questions not belonging to specific categories |
-| **Location Positioning** | Inquire about specific locations of lesions or structures (limited options) |
-
-#### Open-end Questions
-| Type | Task Description |
-|------|------------------|
-| **General Description** | Open-ended questions requiring comprehensive description or explanation |
-| **Anatomical Identification** | Identify and describe anatomical structures or organs in images |
-| **Location Description** | Detailed description of lesion or structure locations |
-| **Abnormality Recognition** | Identify and describe pathological changes or abnormal findings |
-| **Counting Tasks** | Count specific objects in images |
-| **Comparative Analysis** | Compare changes across different structures or time points |
-| **Appearance Description** | Describe visual characteristics of lesions or structures |
-| **Impact Assessment** | Evaluate lesion impact on surrounding structures |
 
 ## 🚀 Model Training
 
@@ -320,19 +328,21 @@ Use the `result_statistic.py` script for category-wise statistical analysis.
 Based on Qwen2-VL-Instruct with concept alignment fine-tuning, applying LoRA technique to the visual-merger-proj module. Comparison results available in: `result/evaluation_metrics.json`
 
 ### Performance Comparison
-| Category | Metric | Qwen2VL2BInst_Stage1 | Qwen2VL7BInst | Qwen2VL7B | Qwen2VL7BBase_Stage1 | Qwen2VL7BInst_Stage1 | Qwen2VL7BInst_SlakeTrain_BaseOnStage1 | Qwen25VL32BInst |
-|----------|--------|--------|--------|--------|--------|--------|--------|--------|
-| Text Matching | Exact Match | 0.4873 | 0.0000 | 0.0000 | 0.2873 | 0.7437 | **0.7493** | 0.0000 |
-| Text Matching | Soft Match | 0.5198 | 0.0634 | 0.0154 | 0.3570 | 0.7443 | **0.7495** | 0.0053 |
-| Text Matching | ROUGE-L | 0.5366 | 0.1002 | 0.0258 | 0.3834 | 0.7450 | **0.7493** | 0.0134 |
-| Text Matching | BLEU-4 | 0.0914 | 0.0093 | 0.0021 | 0.0607 | 0.1324 | **0.1332** | 0.0010 |
-| Text Matching | Word Overlap | 0.5167 | 0.0631 | 0.0188 | 0.3467 | 0.7444 | **0.7493** | 0.0109 |
-| Fine-grained | Char F1 | 0.5674 | 0.2173 | 0.1875 | 0.4293 | 0.7424 | **0.7481** | 0.1822 |
-| Fine-grained | Word F1 | 0.5390 | 0.1121 | 0.0361 | 0.3886 | 0.7451 | **0.7493** | 0.0214 |
-| Fine-grained | Char Precision | 0.5349 | 0.1283 | 0.1083 | 0.3722 | 0.7417 | **0.7480** | 0.1052 |
-| Fine-grained | Char Recall | 0.7765 | **0.8582** | 0.7798 | 0.8061 | 0.7535 | 0.7493 | 0.8202 |
-| Fine-grained | Word Precision | 0.5167 | 0.0631 | 0.0188 | 0.3467 | 0.7444 | **0.7493** | 0.0109 |
-| Fine-grained | Word Recall | 0.7296 | 0.6986 | 0.5887 | 0.7014 | **0.7549** | 0.7493 | 0.6620 |
+| Category | Metric | Stage1CTL | Stage1 | Stage2 | Stage1Reasoning | Stage1ReasoningCTL | 7BOriCTL | 7BOri | Qwen25VL32BInst |
+|----------|--------|--------|--------|--------|--------|--------|--------|--------|--------|
+| Text Matching | Exact Match | 0.4807 | **0.4816** | 0.4722 | 0.0452 | 0.2413 | 0.2705 | 0.0000 | 0.0000 |
+| Text Matching | Soft Match | 0.5822 | **0.5835** | 0.5791 | 0.3156 | 0.4713 | 0.3630 | 0.0960 | 0.0037 |
+| Text Matching | ROUGE-L | 0.5267 | **0.5285** | 0.5125 | 0.3200 | 0.4623 | 0.3331 | 0.0897 | 0.0156 |
+| Text Matching | BLEU-4 | 0.0916 | **0.0920** | 0.0899 | 0.0432 | 0.0736 | 0.0540 | 0.0082 | 0.0009 |
+| Text Matching | Word Overlap | 0.5077 | **0.5088** | 0.4954 | 0.2514 | 0.4189 | 0.3092 | 0.0565 | 0.0125 |
+| Text Matching | BERTScore F1 | **0.0000** | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| Fine-grained | Word Contain | 0.5938 | 0.5957 | 0.5533 | 0.5749 | 0.6136 | 0.6051 | 0.5975 | **0.7135** |
+| Fine-grained | Char F1 | 0.6554 | **0.6569** | 0.6247 | 0.4249 | 0.5550 | 0.5466 | 0.3525 | 0.3236 |
+| Fine-grained | Word F1 | 0.5198 | **0.5211** | 0.5052 | 0.3088 | 0.4533 | 0.3362 | 0.0994 | 0.0244 |
+| Fine-grained | Char Precision | 0.6541 | **0.6557** | 0.6370 | 0.3581 | 0.5132 | 0.4875 | 0.2581 | 0.2264 |
+| Fine-grained | Char Recall | 0.6958 | 0.6992 | 0.6383 | 0.7208 | 0.7159 | 0.7640 | 0.7999 | **0.8596** |
+| Fine-grained | Word Precision | 0.5176 | **0.5192** | 0.5095 | 0.2628 | 0.4314 | 0.3106 | 0.0574 | 0.0125 |
+| Fine-grained | Word Recall | 0.5490 | 0.5497 | 0.5154 | 0.5200 | 0.5667 | 0.5457 | 0.5403 | **0.6631** |
 
 ### Key Findings
 - **Closed-set Questions**: LoRA model shows significant improvement across all metrics, particularly Exact Match improving from 0.000 to 0.341
