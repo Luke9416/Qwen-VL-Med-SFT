@@ -13,7 +13,7 @@
 
 项目采用 [LLaVA-Med](https://github.com/microsoft/LLaVA-Med) 数据集，实现两阶段微调策略：**概念对齐**（Concept Alignment）和**指令跟随**（Instruction Following）。
 项目采用 [Med-GRIT-270K](https://github.com/ShawnHuang497/BiRD) 数据集，进行grounding相关能力的效果优化
-项目采用 Reasonging&direct 为基于 LLaVA-Med 的instruct 数据集自建，代码 [`data_process/reason_direct_gene.py`]
+项目采用 Reasonging&direct 为基于 LLaVA-Med 的instruct 数据集自建，代码 [`data_process/reason_direct_gene.py`](data_process/reason_direct_gene.py)
 
 ## 📊 数据预处理流程
 
