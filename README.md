@@ -182,41 +182,49 @@ bash run_eval.sh
 * **数据集介绍**
 
 
-* **结果分析**
-* Visual Grounding (200 sample)
-| Metric | ReasonLora32 | ReasonLoraPmt | OriPmt | GroundLoraPmt | Stage1AllPmt | Stage1Lora16PMT | Stage1 | ReasonLora | RefausePmt |
-|--------|---------|---------|---------|---------|---------|---------|---------|---------|---------|
-| Consistency Rate | 0.0500 | 0.7600 | 0.7950 | 0.7273 | **0.8800** | 0.8800 | 0.0600 | 0.0500 | 0.2800 |
-| Average IoU | NAN | 0.1232 | 0.1695 | 0.4301 | 0.1927 | 0.1861 | NAN | NAN | 0.1141 |
-| IoU > 0.5 Rate | NAN | 0.0043 | 0.0303 | **0.2667** | 0.0433 | 0.0519 | NAN | NAN | 0.0043 |
-| Center Inclusion Accuracy | NAN | 0.0996 | 0.1255 | **0.3333** | 0.1429 | 0.2338 | 0.0087 | 0.0000 | 0.0736 |
-| Average CPE | NAN | 111.4301 | 114.6439 | **69.0272** | 121.8034 | 162.8852 | NAN | NAN | 27.5950 |
-| Avg Position Match Rate | 0.0768 | 0.1690 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | **0.2165** | 0.0768 | 0.0000 |
+**结果分析**
 
-* 指标介绍：
-| 指标               | 说明                                                   | 指标                        | 说明                                                |
-| ---------------- | ---------------------------------------------------- | ------------------------- | ------------------------------------------------- |
-| Consistency Rate | Predict中包含有Boxes的比例              | Average IoU               | 平均交并比（Intersection over Union），衡量预测框与真实框重叠程度的平均值。 |
-| IoU > 0.5 Rate   | 预测框与真实框的 IoU 超过 0.5 的帧（或样本）占总数的比例   | Center Inclusion Accuracy | 预测框中心点落在真实框内部的比例   |
-| Average CPE      | 平均中心点误差（Center Point Error） | Avg Position Match Rate   | 位置关键词匹配    |
-Avg Position Match Rate: 将坐标转换为图像的相对位置，对比输出结果中是否有关键词匹配
+### Visual Grounding (200 sample)
 
-*  Refering Object Classification (200 sample)
-| Category | Metric | ReasonLora | Stage1Lora | Stage1All | Ground | Ori |
-|----------|--------|--------|--------|--------|--------|--------|
-| Text Matching | Exact Match | 0.0000 | 0.0100 | 0.0000 | **0.5500** | 0.0000 |
-| Text Matching | Soft Match | 0.2544 | 0.1616 | 0.1082 | **0.7217** | 0.0588 |
-| Text Matching | Word Overlap | 0.0379 | 0.0240 | 0.0092 | **0.6217** | 0.0018 |
-| Text Matching | BERTScore F1 | 0.3513 | 0.2746 | 0.2449 | **0.7467** | 0.2731 |
-| Text Matching | ROUGE 1 | 0.0211 | 0.0102 | 0.0117 | **0.6088** | 0.0000 |
-| Text Matching | METOR | 0.0306 | 0.0243 | 0.0244 | **0.4009** | 0.0053 |
-| Fine-grained | Word Contain | 0.0800 | 0.0800 | 0.1200 | **0.6600** | 0.0909 |
-| Fine-grained | Char F1 | 0.4395 | 0.4493 | 0.4678 | **0.7712** | 0.4680 |
-| Fine-grained | Word F1 | 0.0479 | 0.0313 | 0.0169 | **0.6330** | 0.0035 |
-| Fine-grained | Char Precision | 0.4178 | 0.3667 | 0.3392 | **0.8119** | 0.3268 |
-| Fine-grained | Char Recall | 0.5532 | 0.7409 | 0.8796 | 0.7918 | **0.8855** |
-| Fine-grained | Word Precision | 0.0504 | 0.0318 | 0.0096 | **0.6408** | 0.0018 |
-| Fine-grained | Word Recall | 0.0512 | 0.0554 | 0.0896 | **0.6308** | 0.0909 |
+|                    Metric | ReasonLora32 | ReasonLoraPmt |   OriPmt | GroundLoraPmt | Stage1AllPmt | Stage1Lora16PMT |     Stage1 | ReasonLora | RefausePmt |
+| ------------------------: | -----------: | ------------: | -------: | ------------: | -----------: | --------------: | ---------: | ---------: | ---------: |
+|          Consistency Rate |       0.0500 |        0.7600 |   0.7950 |        0.7273 |   **0.8800** |          0.8800 |     0.0600 |     0.0500 |     0.2800 |
+|               Average IoU |          NAN |        0.1232 |   0.1695 |        0.4301 |       0.1927 |          0.1861 |        NAN |        NAN |     0.1141 |
+|            IoU > 0.5 Rate |          NAN |        0.0043 |   0.0303 |    **0.2667** |       0.0433 |          0.0519 |        NAN |        NAN |     0.0043 |
+| Center Inclusion Accuracy |          NAN |        0.0996 |   0.1255 |    **0.3333** |       0.1429 |          0.2338 |     0.0087 |     0.0000 |     0.0736 |
+|               Average CPE |          NAN |      111.4301 | 114.6439 |   **69.0272** |     121.8034 |        162.8852 |        NAN |        NAN |    27.5950 |
+|   Avg Position Match Rate |       0.0768 |        0.1690 |   0.0000 |        0.0000 |       0.0000 |          0.0000 | **0.2165** |     0.0768 |     0.0000 |
+
+#### 指标介绍
+
+| 指标                        | 说明                                                  |
+| ------------------------- | --------------------------------------------------- |
+| Consistency Rate          | Predict 中包含有 Boxes 的比例                              |
+| Average IoU               | 平均交并比（Intersection over Union），衡量预测框与真实框重叠程度的平均值    |
+| IoU > 0.5 Rate            | 预测框与真实框的 IoU 超过 0.5 的帧（或样本）占总数的比例                   |
+| Center Inclusion Accuracy | 预测框中心点落在真实框内部的比例                                    |
+| Average CPE               | 平均中心点误差（Center Point Error），即预测框中心与真实框中心之间的欧氏距离的平均值 |
+| Avg Position Match Rate   | 位置关键词匹配：将坐标转换为图像的相对位置，对比输出结果中是否有关键词匹配               |
+
+---
+
+**Refering Object Classification (200 sample)**
+
+| Category          | Metric         | ReasonLora | Stage1Lora | Stage1All |     Ground |        Ori |
+| ----------------- | -------------- | ---------: | ---------: | --------: | ---------: | ---------: |
+| **Text Matching** | Exact Match    |     0.0000 |     0.0100 |    0.0000 | **0.5500** |     0.0000 |
+|                   | Soft Match     |     0.2544 |     0.1616 |    0.1082 | **0.7217** |     0.0588 |
+|                   | Word Overlap   |     0.0379 |     0.0240 |    0.0092 | **0.6217** |     0.0018 |
+|                   | BERTScore F1   |     0.3513 |     0.2746 |    0.2449 | **0.7467** |     0.2731 |
+|                   | ROUGE 1        |     0.0211 |     0.0102 |    0.0117 | **0.6088** |     0.0000 |
+|                   | METEOR         |     0.0306 |     0.0243 |    0.0244 | **0.4009** |     0.0053 |
+| **Fine-grained**  | Word Contain   |     0.0800 |     0.0800 |    0.1200 | **0.6600** |     0.0909 |
+|                   | Char F1        |     0.4395 |     0.4493 |    0.4678 | **0.7712** |     0.4680 |
+|                   | Word F1        |     0.0479 |     0.0313 |    0.0169 | **0.6330** |     0.0035 |
+|                   | Char Precision |     0.4178 |     0.3667 |    0.3392 | **0.8119** |     0.3268 |
+|                   | Char Recall    |     0.5532 |     0.7409 |    0.8796 |     0.7918 | **0.8855** |
+|                   | Word Precision |     0.0504 |     0.0318 |    0.0096 | **0.6408** |     0.0018 |
+|                   | Word Recall    |     0.0512 |     0.0554 |    0.0896 | **0.6308** |     0.0909 |
 
 
 * 总体分析：
